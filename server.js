@@ -11,17 +11,18 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Storage config for uploads (resume, cover letter)
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Base test route
+// ----------------------
+// ROOT ROUTE
+// ----------------------
 app.get("/", (req, res) => {
-  res.send("✅ SwipeApply Backend is running.");
+  res.send("✅ SwipeApply Backend (Indeed API Connected)");
 });
 
 
 // ----------------------
-// JOBS ROUTE
+// JOBS ROUTE (uses RapidAPI hardcoded key)
 // ----------------------
 app.get("/jobs", async (req, res) => {
   try {
@@ -31,7 +32,7 @@ app.get("/jobs", async (req, res) => {
     const response = await axios.get("https://indeed12.p.rapidapi.com/jobs/search", {
       params: { query, location, page: "1" },
       headers: {
-        "x-rapidapi-key": process.env.INDEED_API_KEY,
+        "x-rapidapi-key": "f2b7d0f577msh6c7796d1e7a2361p1c6bafjsn7270642f761b",
         "x-rapidapi-host": "indeed12.p.rapidapi.com"
       }
     });
@@ -66,7 +67,6 @@ app.post("/apply", upload.fields([
 
     console.log("New application received:", jobId, swipeDirection);
 
-    // Optional: simulate AI autofill for job questions
     let answers = [];
     if (questions) {
       const parsedQuestions = JSON.parse(questions);
@@ -76,7 +76,6 @@ app.post("/apply", upload.fields([
       }));
     }
 
-    // Log uploaded files
     if (resumeFile) console.log("Resume uploaded:", resumeFile.originalname);
     if (coverLetterFile) console.log("Cover letter uploaded:", coverLetterFile.originalname);
 
@@ -93,7 +92,15 @@ app.post("/apply", upload.fields([
 
 
 // ----------------------
+// HEALTH CHECK ROUTE
+// ----------------------
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", uptime: process.uptime() });
+});
+
+
+// ----------------------
 // START SERVER
 // ----------------------
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 SwipeApply backend running on port ${PORT}`));
