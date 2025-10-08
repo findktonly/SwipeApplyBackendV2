@@ -11,49 +11,51 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// File upload setup
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ----------------------
 // ROOT ROUTE
 // ----------------------
 app.get("/", (req, res) => {
-  res.send("✅ SwipeApply Backend - Live Indeed API only");
+  res.send("✅ SwipeApply Backend - Live Indeed API (vFinal)");
 });
 
 
 // ----------------------
-// JOBS ROUTE (Indeed only)
+// JOBS ROUTE - FETCH FROM INDEED
 // ----------------------
 app.get("/jobs", async (req, res) => {
   try {
     const query = req.query.title || "software engineer";
     const location = req.query.location || "Austin, TX";
 
-    console.log("Fetching jobs for:", query, "in", location);
+    console.log(`📡 Fetching jobs for: ${query} in ${location}`);
 
     const response = await axios.get("https://indeed12.p.rapidapi.com/jobs/search", {
       params: { query, location, page: "1" },
       headers: {
-        "x-rapidapi-key": "f2b7d0f577msh6c7796d1e7a2361p1c6bafjsn7270642f761b", // Replace with your valid Indeed API key
+        "x-rapidapi-key": process.env.INDEED_API_KEY || "f2b7d0f577msh6c7796d1e7a2361p1c6bafjsn7270642f761b",
         "x-rapidapi-host": "indeed12.p.rapidapi.com"
       }
     });
-console.log("Indeed raw response:", JSON.stringify(response.data, null, 2));
 
-    if (!response.data || !response.data.jobs) {
-      console.log("❌ Indeed API returned unexpected format:", response.data);
+    if (!response.data || !response.data.hits) {
+      console.log("⚠️ Indeed API returned unexpected data:", response.data);
       return res.status(500).json({ error: "Indeed API returned no job results" });
     }
 
-    const jobs = response.data.jobs.map((job, index) => ({
-      id: job.jobkey || `${index}`,
+    const jobs = response.data.hits.map((job, index) => ({
+      id: job.id || `${index}`,
       title: job.title || "Untitled",
-      company: job.company_name || "Unknown",
+      company: job.company_name || "Unknown Company",
       location: job.location || "Remote",
+      link: job.link ? `https://indeed.com${job.link}` : "",
+      posted: job.formatted_relative_time || "",
       description: job.snippet || "No description available."
     }));
 
-    console.log(`✅ Returned ${jobs.length} live jobs from Indeed`);
+    console.log(`✅ Returned ${jobs.length} jobs from Indeed`);
     res.json(jobs);
 
   } catch (error) {
@@ -61,7 +63,10 @@ console.log("Indeed raw response:", JSON.stringify(response.data, null, 2));
     if (error.response) {
       console.error("Response status:", error.response.status);
       console.error("Response data:", error.response.data);
-      return res.status(error.response.status).json(error.response.data);
+      return res.status(error.response.status).json({
+        error: "Indeed API error",
+        details: error.response.data
+      });
     }
     res.status(500).json({ error: "Failed to fetch jobs from Indeed" });
   }
@@ -69,45 +74,49 @@ console.log("Indeed raw response:", JSON.stringify(response.data, null, 2));
 
 
 // ----------------------
-// APPLY ROUTE
+// APPLY ROUTE - HANDLE APPLICATION SUBMISSION
 // ----------------------
-app.post("/apply", upload.fields([
-  { name: "resume", maxCount: 1 },
-  { name: "coverLetter", maxCount: 1 }
-]), async (req, res) => {
-  try {
-    const { jobId, swipeDirection, questions } = req.body;
-    const resumeFile = req.files?.resume?.[0];
-    const coverLetterFile = req.files?.coverLetter?.[0];
+app.post(
+  "/apply",
+  upload.fields([
+    { name: "resume", maxCount: 1 },
+    { name: "coverLetter", maxCount: 1 }
+  ]),
+  async (req, res) => {
+    try {
+      const { jobId, swipeDirection, questions } = req.body;
+      const resumeFile = req.files?.resume?.[0];
+      const coverLetterFile = req.files?.coverLetter?.[0];
 
-    console.log("Application received for job:", jobId, "| Direction:", swipeDirection);
+      console.log(`📨 Application received for job: ${jobId} | Swipe: ${swipeDirection}`);
 
-    let answers = [];
-    if (questions) {
-      const parsedQuestions = JSON.parse(questions);
-      answers = parsedQuestions.map(q => ({
-        question: q,
-        answer: "AI-generated answer placeholder"
-      }));
+      let answers = [];
+      if (questions) {
+        const parsedQuestions = JSON.parse(questions);
+        answers = parsedQuestions.map((q) => ({
+          question: q,
+          answer: "AI-generated placeholder"
+        }));
+      }
+
+      if (resumeFile) console.log(`📎 Resume uploaded: ${resumeFile.originalname}`);
+      if (coverLetterFile) console.log(`📎 Cover Letter uploaded: ${coverLetterFile.originalname}`);
+
+      res.json({
+        success: true,
+        message: `Application submitted for job ${jobId}`,
+        answers
+      });
+    } catch (err) {
+      console.error("❌ Error processing application:", err.message);
+      res.status(500).json({ error: "Failed to process application" });
     }
-
-    if (resumeFile) console.log("Resume uploaded:", resumeFile.originalname);
-    if (coverLetterFile) console.log("Cover letter uploaded:", coverLetterFile.originalname);
-
-    res.json({
-      success: true,
-      message: `Application submitted for job ${jobId}`,
-      answers
-    });
-  } catch (error) {
-    console.error("❌ Error in /apply:", error.message);
-    res.status(500).json({ error: "Failed to process application" });
   }
-});
+);
 
 
 // ----------------------
-// HEALTH CHECK ROUTE
+// HEALTH CHECK
 // ----------------------
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", uptime: process.uptime() });
@@ -118,4 +127,4 @@ app.get("/health", (req, res) => {
 // START SERVER
 // ----------------------
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 SwipeApply backend (Indeed only) running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 SwipeApply Backend running on port ${PORT}`));
