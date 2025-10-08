@@ -17,12 +17,12 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ROOT ROUTE
 // ----------------------
 app.get("/", (req, res) => {
-  res.send("✅ SwipeApply Backend (Indeed API with Logging Enabled)");
+  res.send("✅ SwipeApply Backend - Live Indeed API only");
 });
 
 
 // ----------------------
-// JOBS ROUTE (with console logging)
+// JOBS ROUTE (Indeed only)
 // ----------------------
 app.get("/jobs", async (req, res) => {
   try {
@@ -34,59 +34,35 @@ app.get("/jobs", async (req, res) => {
     const response = await axios.get("https://indeed12.p.rapidapi.com/jobs/search", {
       params: { query, location, page: "1" },
       headers: {
-        "x-rapidapi-key": "f2b7d0f577msh6c7796d1e7a2361p1c6bafjsn7270642f761b",
+        "x-rapidapi-key": "f2b7d0f577msh6c7796d1e7a2361p1c6bafjsn7270642f761b", // Replace with your valid Indeed API key
         "x-rapidapi-host": "indeed12.p.rapidapi.com"
       }
     });
 
-    // Print full response for debugging
-    console.log("Indeed API raw response:");
-    console.log(JSON.stringify(response.data, null, 2));
+    if (!response.data || !response.data.jobs) {
+      console.log("❌ Indeed API returned unexpected format:", response.data);
+      return res.status(500).json({ error: "Indeed API returned no job results" });
+    }
 
-    let jobs = response.data.jobs?.map((job, index) => ({
+    const jobs = response.data.jobs.map((job, index) => ({
       id: job.jobkey || `${index}`,
       title: job.title || "Untitled",
-      company: job.company_name || "Unknown Company",
+      company: job.company_name || "Unknown",
       location: job.location || "Remote",
       description: job.snippet || "No description available."
     }));
 
-    // Fallback mock data if no jobs are found
-    if (!jobs || jobs.length === 0) {
-      console.log("⚠️ No jobs returned — using fallback mock data.");
-      jobs = [
-        {
-          id: "1",
-          title: "Software QA Engineer",
-          company: "General Motors",
-          location: "Austin, TX",
-          description: "Test automation and validation for automotive systems."
-        },
-        {
-          id: "2",
-          title: "Full Stack Developer",
-          company: "TechNova",
-          location: "Remote",
-          description: "Develop scalable web and mobile applications."
-        },
-        {
-          id: "3",
-          title: "Data Analyst",
-          company: "BlueSky Analytics",
-          location: "Hybrid - Dallas, TX",
-          description: "Work with SQL, Python, and BI tools to deliver insights."
-        }
-      ];
-    }
-
+    console.log(`✅ Returned ${jobs.length} live jobs from Indeed`);
     res.json(jobs);
+
   } catch (error) {
     console.error("❌ Error fetching jobs:", error.message);
     if (error.response) {
       console.error("Response status:", error.response.status);
       console.error("Response data:", error.response.data);
+      return res.status(error.response.status).json(error.response.data);
     }
-    res.status(500).json({ error: "Failed to fetch jobs" });
+    res.status(500).json({ error: "Failed to fetch jobs from Indeed" });
   }
 });
 
@@ -103,12 +79,12 @@ app.post("/apply", upload.fields([
     const resumeFile = req.files?.resume?.[0];
     const coverLetterFile = req.files?.coverLetter?.[0];
 
-    console.log("New application received:", jobId, swipeDirection);
+    console.log("Application received for job:", jobId, "| Direction:", swipeDirection);
 
     let answers = [];
     if (questions) {
       const parsedQuestions = JSON.parse(questions);
-      answers = parsedQuestions.map((q, i) => ({
+      answers = parsedQuestions.map(q => ({
         question: q,
         answer: "AI-generated answer placeholder"
       }));
@@ -123,7 +99,7 @@ app.post("/apply", upload.fields([
       answers
     });
   } catch (error) {
-    console.error("Error processing application:", error.message);
+    console.error("❌ Error in /apply:", error.message);
     res.status(500).json({ error: "Failed to process application" });
   }
 });
@@ -141,4 +117,4 @@ app.get("/health", (req, res) => {
 // START SERVER
 // ----------------------
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 SwipeApply backend running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 SwipeApply backend (Indeed only) running on port ${PORT}`));
