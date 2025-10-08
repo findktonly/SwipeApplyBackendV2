@@ -11,19 +11,17 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// File upload setup
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ----------------------
 // ROOT ROUTE
 // ----------------------
 app.get("/", (req, res) => {
-  res.send("✅ SwipeApply Backend - Live Indeed API (vFinal)");
+  res.send("✅ SwipeApply Backend - iOS Optimized Version (Indeed Live)");
 });
 
-
 // ----------------------
-// JOBS ROUTE - FETCH FROM INDEED
+// JOBS ROUTE (CLEAN FORMAT)
 // ----------------------
 app.get("/jobs", async (req, res) => {
   try {
@@ -45,17 +43,17 @@ app.get("/jobs", async (req, res) => {
       return res.status(500).json({ error: "Indeed API returned no job results" });
     }
 
+    // 🧠 Simplified for clean UI card display
     const jobs = response.data.hits.map((job, index) => ({
       id: job.id || `${index}`,
-      title: job.title || "Untitled",
+      title: job.title || "Untitled Job",
       company: job.company_name || "Unknown Company",
       location: job.location || "Remote",
       link: job.link ? `https://indeed.com${job.link}` : "",
-      posted: job.formatted_relative_time || "",
-      description: job.snippet || "No description available."
+      posted: job.formatted_relative_time || "Recently posted"
     }));
 
-    console.log(`✅ Returned ${jobs.length} jobs from Indeed`);
+    console.log(`✅ Returned ${jobs.length} live jobs`);
     res.json(jobs);
 
   } catch (error) {
@@ -72,9 +70,8 @@ app.get("/jobs", async (req, res) => {
   }
 });
 
-
 // ----------------------
-// APPLY ROUTE - HANDLE APPLICATION SUBMISSION
+// APPLY ROUTE
 // ----------------------
 app.post(
   "/apply",
@@ -84,36 +81,26 @@ app.post(
   ]),
   async (req, res) => {
     try {
-      const { jobId, swipeDirection, questions } = req.body;
+      const { jobId, swipeDirection } = req.body;
       const resumeFile = req.files?.resume?.[0];
       const coverLetterFile = req.files?.coverLetter?.[0];
 
-      console.log(`📨 Application received for job: ${jobId} | Swipe: ${swipeDirection}`);
-
-      let answers = [];
-      if (questions) {
-        const parsedQuestions = JSON.parse(questions);
-        answers = parsedQuestions.map((q) => ({
-          question: q,
-          answer: "AI-generated placeholder"
-        }));
-      }
-
+      console.log(`📨 Applying to job ${jobId} | Swipe: ${swipeDirection}`);
       if (resumeFile) console.log(`📎 Resume uploaded: ${resumeFile.originalname}`);
       if (coverLetterFile) console.log(`📎 Cover Letter uploaded: ${coverLetterFile.originalname}`);
 
       res.json({
         success: true,
         message: `Application submitted for job ${jobId}`,
-        answers
+        resume: !!resumeFile,
+        coverLetter: !!coverLetterFile
       });
     } catch (err) {
-      console.error("❌ Error processing application:", err.message);
+      console.error("❌ Error in /apply:", err.message);
       res.status(500).json({ error: "Failed to process application" });
     }
   }
 );
-
 
 // ----------------------
 // HEALTH CHECK
@@ -121,7 +108,6 @@ app.post(
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", uptime: process.uptime() });
 });
-
 
 // ----------------------
 // START SERVER
