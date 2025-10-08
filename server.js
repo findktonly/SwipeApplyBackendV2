@@ -34,7 +34,7 @@ app.get("/jobs", async (req, res) => {
     const response = await axios.get("https://indeed12.p.rapidapi.com/jobs/search", {
       params: { query, location, page: "1" },
       headers: {
-        "x-rapidapi-key": "f2b7d0f577msh6c7796d1e7a23",
+        "x-rapidapi-key": "f2b7d0f577msh6c7796d1e7a2361p1c6bafjsn7270642f761b",
         "x-rapidapi-host": "indeed12.p.rapidapi.com"
       }
     });
