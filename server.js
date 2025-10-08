@@ -1,133 +1,99 @@
-// server.js
-const express = require("express");
-const bodyParser = require("body-parser");
-const multer = require("multer"); // for handling file uploads
-const axios = require("axios");
-const OpenAI = require("openai");
-require("dotenv").config();
+import express from "express";
+import bodyParser from "body-parser";
+import multer from "multer";
+import axios from "axios";
+import dotenv from "dotenv";
+import cors from "cors";
+
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware
+app.use(cors());
 app.use(bodyParser.json());
 
-// Multer setup for cover letter uploads
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+// Storage config for uploads (resume, cover letter)
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-// =========================
-// Routes
-// =========================
-
-// Root
+// Base test route
 app.get("/", (req, res) => {
-  res.send("SwipeApply backend is running!");
+  res.send("✅ SwipeApply Backend is running.");
 });
 
-// Fetch jobs from Indeed API
+
+// ----------------------
+// JOBS ROUTE
+// ----------------------
 app.get("/jobs", async (req, res) => {
   try {
-    const location = req.query.location || "Remote";
-    const title = req.query.title || "";
+    const query = req.query.title || "software engineer";
+    const location = req.query.location || "Austin, TX";
 
-    const options = {
-      method: "GET",
-      url: "https://indeed12.p.rapidapi.com/jobs",
-      params: { q: title, location },
+    const response = await axios.get("https://indeed12.p.rapidapi.com/jobs/search", {
+      params: { query, location, page: "1" },
       headers: {
-        "X-RapidAPI-Key": process.env.RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "indeed12.p.rapidapi.com"
+        "x-rapidapi-key": process.env.INDEED_API_KEY,
+        "x-rapidapi-host": "indeed12.p.rapidapi.com"
       }
-    };
+    });
 
-    const response = await axios.request(options);
-    res.json(response.data);
+    const jobs = response.data.jobs?.map((job, index) => ({
+      id: job.jobkey || `${index}`,
+      title: job.title || "Untitled",
+      company: job.company_name || "Unknown Company",
+      location: job.location || "Remote",
+      description: job.snippet || "No description available."
+    })) || [];
+
+    res.json(jobs);
   } catch (error) {
-    console.error("Error fetching jobs:", error);
+    console.error("Error fetching jobs:", error.message);
     res.status(500).json({ error: "Failed to fetch jobs" });
   }
 });
 
-// AI fills additional application questions
-app.post("/fill-questions", async (req, res) => {
-  try {
-    const { questions } = req.body;
 
-    const prompt = `Answer the following job application questions as if you are qualified:\n${questions.join("\n")}`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }]
-    });
-
-    const answers = response.choices[0].message.content;
-    res.json({ answers });
-  } catch (error) {
-    console.error("Error with OpenAI:", error);
-    res.status(500).json({ error: "Failed to get AI answers" });
-  }
-});
-
-// Swipe-to-apply endpoint
-app.post("/apply", upload.single("coverLetter"), async (req, res) => {
+// ----------------------
+// APPLY ROUTE
+// ----------------------
+app.post("/apply", upload.fields([
+  { name: "resume", maxCount: 1 },
+  { name: "coverLetter", maxCount: 1 }
+]), async (req, res) => {
   try {
     const { jobId, swipeDirection, questions } = req.body;
-    let coverLetter = null;
+    const resumeFile = req.files?.resume?.[0];
+    const coverLetterFile = req.files?.coverLetter?.[0];
 
-    if (req.file) {
-      coverLetter = req.file.buffer.toString("utf-8"); // convert uploaded file to text
+    console.log("New application received:", jobId, swipeDirection);
+
+    // Optional: simulate AI autofill for job questions
+    let answers = [];
+    if (questions) {
+      const parsedQuestions = JSON.parse(questions);
+      answers = parsedQuestions.map((q, i) => ({
+        question: q,
+        answer: "AI-generated answer placeholder"
+      }));
     }
 
-    // If swipe left, ignore application
-    if (swipeDirection === "left") {
-      return res.json({ message: "Job skipped." });
-    }
-
-    // If there are questions, fill them with AI
-    let aiAnswers = null;
-    if (questions && questions.length > 0) {
-      const prompt = `Answer the following job application questions as if you are qualified:\n${questions.join("\n")}`;
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }]
-      });
-
-      aiAnswers = response.choices[0].message.content;
-    }
-
-    // Example: send application to Indeed API (this is pseudo-code; replace with real endpoint if available)
-    /*
-    await axios.post("https://indeed12.p.rapidapi.com/apply", {
-      jobId,
-      coverLetter,
-      answers: aiAnswers
-    }, {
-      headers: {
-        "X-RapidAPI-Key": process.env.RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "indeed12.p.rapidapi.com"
-      }
-    });
-    */
+    // Log uploaded files
+    if (resumeFile) console.log("Resume uploaded:", resumeFile.originalname);
+    if (coverLetterFile) console.log("Cover letter uploaded:", coverLetterFile.originalname);
 
     res.json({
-      message: "Application submitted successfully!",
-      aiAnswers,
-      coverLetterUploaded: !!coverLetter
+      success: true,
+      message: `Application submitted for job ${jobId}`,
+      answers
     });
   } catch (error) {
-    console.error("Error applying to job:", error);
-    res.status(500).json({ error: "Failed to apply to job" });
+    console.error("Error processing application:", error.message);
+    res.status(500).json({ error: "Failed to process application" });
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+// ----------------------
+// START SERVER
+// ----------------------
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
