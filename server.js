@@ -38,6 +38,7 @@ app.get("/jobs", async (req, res) => {
         "x-rapidapi-host": "indeed12.p.rapidapi.com"
       }
     });
+console.log("Indeed raw response:", JSON.stringify(response.data, null, 2));
 
     if (!response.data || !response.data.jobs) {
       console.log("❌ Indeed API returned unexpected format:", response.data);
